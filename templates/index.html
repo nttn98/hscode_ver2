@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HS Code + AI Chat</title>
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='styles.css') }}"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div class="container">
+      <!-- LEFT PANEL: HS CODE -->
+      <div class="panel left-panel">
+        <header>
+          <h1>TRA CỨU MÃ HS AI</h1>
+          <p class="subtitle">Tìm kiếm thông minh & Phân cấp Caselaw</p>
+        </header>
+
+        <div class="search-area">
+          <div class="input-wrapper">
+            <input
+              type="text"
+              id="query"
+              placeholder="Nhập tên sản phẩm (VD: thỏ, thịt bò...)"
+              onkeypress="if(event.key==='Enter') handleSearch()"
+            />
+            <button onclick="handleSearch()" id="searchBtn">TÌM KIẾM</button>
+          </div>
+          <div id="loading" class="loading-spinner hidden">
+            <div class="spinner"></div>
+            <span>AI đang phân tích dữ liệu...</span>
+          </div>
+        </div>
+
+        <div id="resultCard" class="result-card hidden">
+          <div class="ai-result-section">
+            <div class="hs-badge">KẾT QUẢ DỰ ĐOÁN</div>
+            <h2 id="resHsCode"></h2>
+          </div>
+
+          <div class="caselaw-section">
+            <h3>📋 Phân cấp biểu thuế (Caselaw)</h3>
+            <div id="hierarchyContent" class="hierarchy-tree"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT PANEL: CHATBOT -->
+      <div class="panel right-panel">
+        <div class="chat-header">Chat AI</div>
+        <div id="chatBox" class="chat-box"></div>
+        <div class="chat-input-wrapper">
+          <input
+            type="text"
+            id="chatInput"
+            placeholder="Nhập câu hỏi..."
+            onkeypress="if(event.key==='Enter') sendChat()"
+          />
+          <button onclick="sendChat()">Gửi</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // HS CODE SEARCH
+      async function handleSearch() {
+        const queryVal = document.getElementById("query").value.trim();
+        const btn = document.getElementById("searchBtn");
+        const loading = document.getElementById("loading");
+        const card = document.getElementById("resultCard");
+
+        if (!queryVal) {
+          alert("Vui lòng nhập tên sản phẩm!");
+          return;
+        }
+
+        btn.disabled = true;
+        loading.classList.remove("hidden");
+        card.classList.add("hidden");
+
+        try {
+          const response = await fetch("/search", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ query: queryVal }),
+          });
+
+          const data = await response.json();
+
+          if (response.ok) {
+            document.getElementById("resHsCode").innerText = data.hs_code;
+
+            const hierarchyDiv = document.getElementById("hierarchyContent");
+            hierarchyDiv.innerHTML = "";
+
+            if (data.caselaw && data.caselaw.chapter) {
+              let html = `<div class="chapter-node">${data.caselaw.chapter}</div><ul class="tree-list">`;
+              const groups =
+                data.caselaw.chapter_groups[data.caselaw.chapter] || [];
+              groups.forEach((item) => {
+                const isMatch = item.includes(data.hs_code);
+                html += `<li class="${
+                  isMatch ? "match-item" : ""
+                }">${item}</li>`;
+              });
+              html += `</ul>`;
+              hierarchyDiv.innerHTML = html;
+            } else {
+              hierarchyDiv.innerHTML =
+                "<p class='no-data'>Không có dữ liệu phân cấp từ Caselaw.</p>";
+            }
+
+            card.classList.remove("hidden");
+          } else {
+            alert("Lỗi: " + (data.error || "Không thể tìm thấy kết quả"));
+          }
+        } catch (err) {
+          alert("Lỗi kết nối server!");
+          console.error(err);
+        } finally {
+          btn.disabled = false;
+          loading.classList.add("hidden");
+        }
+      }
+
+      // CHATBOT
+      function addMessage(text, type) {
+        const chatBox = document.getElementById("chatBox");
+        const msgDiv = document.createElement("div");
+        msgDiv.className =
+          "chat-bubble " + (type === "user" ? "chat-user" : "chat-bot");
+        msgDiv.innerText = text;
+        chatBox.appendChild(msgDiv);
+        chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: "smooth" });
+      }
+
+      async function sendChat() {
+        const input = document.getElementById("chatInput");
+        const message = input.value.trim();
+        if (!message) return;
+        addMessage(message, "user");
+        input.value = "";
+
+        try {
+          const responseText = "Đây là phản hồi AI cho: " + message;
+          addMessage(responseText, "bot");
+        } catch (err) {
+          addMessage("Lỗi khi kết nối AI.", "bot");
+          console.error(err);
+        }
+      }
+    </script>
+  </body>
+</html>
